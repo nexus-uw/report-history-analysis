@@ -1,3 +1,4 @@
+
 const es = require('event-stream');
 const fs = require('fs');
 const R = require('ramda')
@@ -12,7 +13,12 @@ fs.createReadStream('./work-order-history.csv')
       return;
     }
     const split = line.split(',');
-    const assPartNum = split[1];
+    let assPartNum = split[1];
+    if (!assPartNum) {
+      return;
+    } else {
+      assPartNum = assPartNum.split('-')[4] || 'OTHER';
+    }
     const assNum = parseInt(split[2]);
 
     const issueDate = split[9]
@@ -27,42 +33,29 @@ fs.createReadStream('./work-order-history.csv')
   }))
   .on('error', e => console.error(e))
   .on('end', () => {
-    const groupedByAssetNumber = R.groupBy(i => i.assNum, records);
-    const reduced = Object.keys(groupedByAssetNumber).reduce((result, assetNumber) => {
-      console.log('key', assetNumber, 'issues', groupedByAssetNumber[assetNumber].length)
-
-      const workDateListPerPart = groupedByAssetNumber[assetNumber].reduce((result, record) => {
+    const partNumToServiceDates = R.map(l => l.sort().reverse(), records.reduce((result, record) => {
+      const time = moment(record.issueDate, 'DD-MMM-YY').toDate().getTime();
+      if (!isNaN(time)) {
         if (!result[record.assPartNum]) {
           result[record.assPartNum] = [];
         }
-        result[record.assPartNum].push(record.issueDate);
-        return result;
-      }, {})
+        result[record.assPartNum].push(time);
+      } else {
+        // ignore invalid date
+      }
+      return result;
+    }, {}));
 
-      result[assetNumber] = Object.keys(workDateListPerPart).map(partName => {
-        if (workDateListPerPart[partName].length <= 1) {
-          return `not enough data for ${partName} in ${assetNumber} `;
-        } else {
-          console.log(workDateListPerPart[partName].map(s => moment(s, 'DD-MMM-YY').toDate().getTime()).sort().reverse())
-          const timeList = workDateListPerPart[partName].map(s => moment(s, 'DD-MMM-YY').toDate().getTime()).sort().reverse()
-
-          const totalUpTime = timeList
-            .map((d, index) => {
-              if (index === 0) {
-                return 0
-              } else {
-                return timeList[index - 1] - d
-              }
-            }).reduce((result, t) => result + t, 0)
-          console.log(timeList)
-          console.log(totalUpTime)
-          // / workDateListPerPart[partName].length;
-          return `${partName} in ${assetNumber} requires service every ${Math.round(totalUpTime / timeList.length / 8.64e+7)} days`;
-        }
-
-      })
-
-      return result
-    }, {})
-    console.log(reduced)
+    const f = R.map(serviceDateList => serviceDateList.map((d, index) => {
+      if (index === 0) {
+        return 0
+      } else {
+        return serviceDateList[index - 1] - d
+      }
+    }).reduce((result, t) => result + t, 0), partNumToServiceDates)
+    const avgTimeBetweenService = R.mapObjIndexed((v, k) => {
+      return Math.round(v / partNumToServiceDates[k].length / 8.64e+7)
+    }, f)
+    //  const f = partNumToServiceDates
+    R.forEachObjIndexed((v, k) => console.log(`part ${k} runs for ~${v} days between service`), avgTimeBetweenService)
   });
