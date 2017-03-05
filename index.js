@@ -57,5 +57,5 @@ fs.createReadStream('./work-order-history.csv')
       return Math.round(v / partNumToServiceDates[k].length / 8.64e+7)
     }, f)
     //  const f = partNumToServiceDates
-    R.forEachObjIndexed((v, k) => console.log(`part ${k} runs for ~${v} days between service`), avgTimeBetweenService)
+    R.forEachObjIndexed((v, k) => v > 0 ? console.log(`part ${k} runs for ~${v} days between service`) : null, avgTimeBetweenService)
   });
