@@ -11,6 +11,6 @@
   "license": "ISC",
   "dependencies": {
     "event-stream": "^3.3.4",
-    "fs": "0.0.1-security"
+    "fs": "0.0.2"
   }
 }
